@@ -4,32 +4,22 @@
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org/)
 [![Version](https://img.shields.io/badge/Version-0.0.1-green.svg)](https://github.com/pengcunfu/go-mcp-exec-command)
 
-一个用 Go 语言开发的 MCP (Model Context Protocol) 服务器，专门用于执行系统命令并解决跨平台兼容性问题。
+一个用 Go 语言开发的 MCP (Model Context Protocol) 服务器，用于直接执行系统命令。
 
 ## 主要功能
 
-### 🔧 跨平台命令转换
-- **Linux `&&` 转 Windows `;`**: 自动将 Linux 风格的命令连接符转换为 Windows 兼容格式
-- **常见命令映射**: 自动转换常见的 Linux 命令到 Windows 等价命令
-  - `ls` → `dir`
-  - `cat` → `type`
-  - `grep` → `findstr`
-  - `which` → `where`
-  - `rm` → `del`
-  - `cp` → `copy`
-  - `mv` → `move`
-  - 等等...
+### ⚡ 直接命令执行
+- **原样执行**: 直接执行提供的命令，不做任何转换或处理
+- **跨平台支持**: 
+  - **Windows**: 使用 PowerShell 执行命令
+  - **Linux/macOS**: 使用 bash 执行命令
+- **系统信息获取**: 提供详细的操作系统信息
 
-### 🛡️ Windsurf 兼容性
-- **Invoke-Session 处理**: 自动处理 Windsurf 添加的 `Invoke-Session ""` 前缀
-- **引号转义**: 智能处理嵌套引号问题，避免命令执行失败
-- **特殊字符处理**: 正确处理命令中的特殊字符
-
-### ⚡ 其他特性
-- **超时控制**: 可配置命令执行超时时间
+### 🛠️ 核心特性
+- **超时控制**: 可配置命令执行超时时间（默认30秒）
 - **工作目录**: 支持指定命令执行的工作目录
-- **详细输出**: 提供执行时间、平台信息等调试信息
 - **错误处理**: 完整的错误信息和退出码
+- **执行统计**: 提供命令执行时间和平台信息
 
 ## 安装和使用
 
@@ -47,9 +37,7 @@ go build -o exec-command-server main.go
 {
   "mcpServers": {
     "go-mcp-exec-command": {
-      "command": "go",
-      "args": ["run", "main.go"],
-      "cwd": "d:\\Data\\Desktop\\Plugins\\go-mcp-exec-command"
+      "command": "./exec-command-server"
     }
   }
 }
@@ -57,32 +45,58 @@ go build -o exec-command-server main.go
 
 ### 3. 使用工具
 
-#### 基本用法
+#### 获取系统信息
 ```json
 {
-  "command": "ls -la && cat README.md"
+  "name": "get_os_info"
 }
 ```
 
-#### 高级用法
+#### Windows PowerShell 命令
 ```json
 {
-  "command": "mkdir -p test && cd test && echo 'hello' > file.txt",
-  "working_dir": "/path/to/directory",
-  "timeout": 60,
-  "auto_convert": true
+  "name": "exec_command",
+  "arguments": {
+    "command": "Get-Process | Select-Object -First 5"
+  }
 }
 ```
 
-## API 参数
+#### Linux/macOS bash 命令
+```json
+{
+  "name": "exec_command", 
+  "arguments": {
+    "command": "ps aux | head -5"
+  }
+}
+```
 
-### 输入参数
+#### 指定工作目录和超时
+```json
+{
+  "name": "exec_command",
+  "arguments": {
+    "command": "dir",
+    "working_dir": "C:\\Users",
+    "timeout": 10
+  }
+}
+```
+
+## API 参考
+
+### 工具列表
+
+#### 1. exec_command
+执行系统命令
+
+**输入参数**:
 - `command` (必需): 要执行的命令
 - `working_dir` (可选): 工作目录
 - `timeout` (可选): 超时时间（秒，默认30）
-- `auto_convert` (可选): 是否自动转换跨平台命令（默认true）
 
-### 输出格式
+**输出格式**:
 ```json
 {
   "success": true,
@@ -90,50 +104,50 @@ go build -o exec-command-server main.go
   "error": "错误信息（如果有）",
   "exit_code": 0,
   "duration": "123ms",
-  "command": "实际执行的命令",
+  "command": "执行的命令",
   "platform": "windows"
 }
 ```
 
-## 智能命令处理
+#### 2. get_os_info
+获取操作系统信息
 
-### 🧠 智能检测机制
-本工具采用智能检测机制，区分不同的命令执行场景：
+**输入参数**: 无
 
-1. **Windsurf 直接执行**: 自动检测 `Invoke-Session` 前缀并进行清理
-2. **MCP 工具执行**: 直接执行用户提供的正常命令
-3. **跨平台转换**: 只在检测到 Linux 命令时才进行转换
+**输出格式**:
+```json
+{
+  "os": "windows",
+  "architecture": "amd64",
+  "version": "Windows 11",
+  "hostname": "DESKTOP-ABC123",
+  "username": "user",
+  "details": "详细系统信息..."
+}
+```
 
-### 🔍 检测规则
-- **Invoke-Session 检测**: 自动识别并处理 Windsurf 添加的前缀
-- **Linux 命令检测**: 智能识别 `ls`、`cat`、`grep`、`&&` 等 Linux 特有语法
-- **按需转换**: 只有在 Windows 平台且检测到 Linux 命令时才进行转换
+## 使用建议
 
-## 解决的问题
+### 💡 最佳实践
+1. **先获取系统信息**: 使用 `get_os_info` 了解目标系统
+2. **使用对应命令**: 
+   - Windows 系统使用 PowerShell 命令
+   - Linux/macOS 系统使用 bash 命令
+3. **设置合理超时**: 根据命令复杂度设置适当的超时时间
 
-### 1. Windsurf Invoke-Session 问题
-**问题**: Windsurf 在直接执行命令时会添加 `Invoke-Session ""` 前缀，导致包含引号的命令执行失败。
+### 🔧 命令示例
 
-**解决方案**: 
-- 智能检测 `Invoke-Session` 前缀
-- 自动清理和转义特殊字符
-- 处理嵌套引号问题
+**Windows PowerShell 命令**:
+- `Get-Process` - 获取进程列表
+- `Get-ChildItem` - 列出文件和目录
+- `Test-Path "C:\path"` - 测试路径是否存在
+- `New-Item -ItemType Directory -Path "C:\newdir"` - 创建目录
 
-### 2. 跨平台命令兼容性
-**问题**: 大模型经常生成 Linux 风格的命令，在 Windows 上无法直接执行。
-
-**解决方案**: 
-- 智能检测 Linux 命令和语法
-- 自动转换为 Windows 等价命令
-- 支持 `&&` 转 `;`、`ls` 转 `dir` 等常见转换
-
-### 3. 命令执行场景区分
-**问题**: 不同执行场景需要不同的处理方式。
-
-**解决方案**: 
-- 区分 Windsurf 直接执行和 MCP 工具执行
-- 只在必要时进行命令处理和转换
-- 保持原始命令的完整性
+**Linux/macOS bash 命令**:
+- `ps aux` - 获取进程列表
+- `ls -la` - 列出文件和目录
+- `test -d /path` - 测试目录是否存在
+- `mkdir -p /newdir` - 创建目录
 
 ## 测试
 
@@ -151,15 +165,14 @@ go-mcp-exec-command/
 ├── main.go              # 主服务器代码
 ├── test_commands.go     # 测试代码
 ├── go.mod              # Go 模块文件
-├── mcp-config.json     # MCP 配置示例
 └── README.md           # 文档
 ```
 
 ### 扩展功能
 你可以通过修改以下函数来扩展功能：
-- `convertLinuxCommands()`: 添加更多命令映射
-- `sanitizeCommand()`: 增强命令清理逻辑
-- `handleNestedQuotes()`: 改进引号处理
+- `executeCommand()`: 修改命令执行逻辑
+- `getOSInfo()`: 增强系统信息获取
+- `getWindowsVersion()`, `getLinuxVersion()`, `getMacOSVersion()`: 改进版本检测
 
 ## 贡献
 
