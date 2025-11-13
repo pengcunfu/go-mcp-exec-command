@@ -144,7 +144,7 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 	// 执行命令
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "cmd", "/c", command)
+		cmd = exec.CommandContext(ctx, "powershell", "-Command", command)
 	} else {
 		cmd = exec.CommandContext(ctx, "sh", "-c", command)
 	}
