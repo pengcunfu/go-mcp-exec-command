@@ -24,6 +24,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -102,6 +103,15 @@ type CommandResponse struct {
 	Duration string `json:"duration"`
 	Command  string `json:"command"`
 	Platform string `json:"platform"`
+}
+
+type OSInfoResponse struct {
+	OS           string `json:"os"`
+	Architecture string `json:"architecture"`
+	Version      string `json:"version"`
+	Hostname     string `json:"hostname"`
+	Username     string `json:"username"`
+	Details      string `json:"details"`
 }
 
 type ExecCommandServer struct{}
@@ -215,6 +225,48 @@ func (s *ExecCommandServer) handleNestedQuotes(command string) string {
 	return strings.ReplaceAll(command, "\"", "\\\"")
 }
 
+// 检测命令是否需要跨平台转换
+func (s *ExecCommandServer) needsCrossPlatformConversion(command string) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	
+	// 检测常见的Linux命令和语法
+	linuxIndicators := []string{
+		" && ",  // Linux命令连接符
+		"ls ",   // Linux命令
+		"cat ",
+		"grep ",
+		"which ",
+		"rm ",
+		"cp ",
+		"mv ",
+		"mkdir -p",
+		"touch ",
+		"pwd",
+	}
+	
+	commandLower := strings.ToLower(command)
+	for _, indicator := range linuxIndicators {
+		if strings.Contains(commandLower, indicator) {
+			return true
+		}
+	}
+	
+	// 检测是否以Linux命令开头
+	linuxCommands := []string{"ls", "cat", "grep", "which", "rm", "cp", "mv", "pwd"}
+	firstWord := strings.Fields(command)
+	if len(firstWord) > 0 {
+		for _, cmd := range linuxCommands {
+			if strings.ToLower(firstWord[0]) == cmd {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
 func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 	startTime := time.Now()
 
@@ -225,9 +277,15 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 
 	// 处理命令
 	originalCommand := req.Command
-	processedCommand := s.sanitizeCommand(req.Command)
-
-	if req.AutoConvert {
+	processedCommand := req.Command
+	
+	// 检测是否是Windsurf的Invoke-Session命令，如果是则需要清理
+	if strings.HasPrefix(req.Command, "Invoke-Session") {
+		processedCommand = s.sanitizeCommand(req.Command)
+	}
+	
+	// 只有在明确需要跨平台转换时才转换
+	if req.AutoConvert && s.needsCrossPlatformConversion(processedCommand) {
 		processedCommand = s.convertCommand(processedCommand)
 	}
 
@@ -280,6 +338,160 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 	return response
 }
 
+// 获取详细的操作系统信息
+func (s *ExecCommandServer) getOSInfo() OSInfoResponse {
+	response := OSInfoResponse{
+		OS:           runtime.GOOS,
+		Architecture: runtime.GOARCH,
+	}
+
+	// 获取主机名
+	if hostname, err := os.Hostname(); err == nil {
+		response.Hostname = hostname
+	}
+
+	// 获取用户名
+	if username := os.Getenv("USER"); username != "" {
+		response.Username = username
+	} else if username := os.Getenv("USERNAME"); username != "" {
+		response.Username = username
+	}
+
+	// 根据操作系统获取详细版本信息
+	switch runtime.GOOS {
+	case "windows":
+		response.Version, response.Details = s.getWindowsVersion()
+	case "linux":
+		response.Version, response.Details = s.getLinuxVersion()
+	case "darwin":
+		response.Version, response.Details = s.getMacOSVersion()
+	default:
+		response.Version = "未知版本"
+		response.Details = "不支持的操作系统"
+	}
+
+	return response
+}
+
+// 获取Windows版本信息
+func (s *ExecCommandServer) getWindowsVersion() (string, string) {
+	// 使用wmic命令获取Windows版本
+	cmd := exec.Command("wmic", "os", "get", "Caption,Version,BuildNumber", "/format:csv")
+	output, err := cmd.Output()
+	if err != nil {
+		// 备用方法：使用ver命令
+		cmd = exec.Command("cmd", "/c", "ver")
+		if output, err = cmd.Output(); err != nil {
+			return "未知", "无法获取Windows版本信息"
+		}
+	}
+
+	outputStr := string(output)
+	
+	// 解析Windows版本
+	if strings.Contains(outputStr, "Windows 11") {
+		return "Windows 11", outputStr
+	} else if strings.Contains(outputStr, "Windows 10") {
+		return "Windows 10", outputStr
+	} else if strings.Contains(outputStr, "Windows 8.1") {
+		return "Windows 8.1", outputStr
+	} else if strings.Contains(outputStr, "Windows 8") {
+		return "Windows 8", outputStr
+	} else if strings.Contains(outputStr, "Windows 7") {
+		return "Windows 7", outputStr
+	} else if strings.Contains(outputStr, "Windows Server 2022") {
+		return "Windows Server 2022", outputStr
+	} else if strings.Contains(outputStr, "Windows Server 2019") {
+		return "Windows Server 2019", outputStr
+	} else if strings.Contains(outputStr, "Windows Server 2016") {
+		return "Windows Server 2016", outputStr
+	} else if strings.Contains(outputStr, "Windows Server") {
+		return "Windows Server", outputStr
+	}
+
+	// 使用正则表达式提取版本号
+	re := regexp.MustCompile(`Microsoft Windows \[Version ([^\]]+)\]`)
+	if matches := re.FindStringSubmatch(outputStr); len(matches) > 1 {
+		return "Windows " + matches[1], outputStr
+	}
+
+	return "Windows (未知版本)", outputStr
+}
+
+// 获取Linux版本信息
+func (s *ExecCommandServer) getLinuxVersion() (string, string) {
+	// 尝试读取/etc/os-release文件
+	if content, err := os.ReadFile("/etc/os-release"); err == nil {
+		lines := strings.Split(string(content), "\n")
+		var name, version string
+		for _, line := range lines {
+			if strings.HasPrefix(line, "NAME=") {
+				name = strings.Trim(strings.TrimPrefix(line, "NAME="), "\"")
+			} else if strings.HasPrefix(line, "VERSION=") {
+				version = strings.Trim(strings.TrimPrefix(line, "VERSION="), "\"")
+			}
+		}
+		if name != "" {
+			if version != "" {
+				return name + " " + version, string(content)
+			}
+			return name, string(content)
+		}
+	}
+
+	// 备用方法：使用lsb_release命令
+	cmd := exec.Command("lsb_release", "-d")
+	if output, err := cmd.Output(); err == nil {
+		line := strings.TrimSpace(string(output))
+		if strings.HasPrefix(line, "Description:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Description:")), line
+		}
+	}
+
+	// 再备用方法：检查常见的发行版文件
+	distroFiles := []string{
+		"/etc/redhat-release",
+		"/etc/debian_version",
+		"/etc/ubuntu-release",
+		"/etc/centos-release",
+	}
+
+	for _, file := range distroFiles {
+		if content, err := os.ReadFile(file); err == nil {
+			return strings.TrimSpace(string(content)), string(content)
+		}
+	}
+
+	return "Linux (未知发行版)", "无法获取Linux版本信息"
+}
+
+// 获取macOS版本信息
+func (s *ExecCommandServer) getMacOSVersion() (string, string) {
+	cmd := exec.Command("sw_vers")
+	output, err := cmd.Output()
+	if err != nil {
+		return "macOS (未知版本)", "无法获取macOS版本信息"
+	}
+
+	outputStr := string(output)
+	lines := strings.Split(outputStr, "\n")
+	var productName, productVersion string
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "ProductName:") {
+			productName = strings.TrimSpace(strings.TrimPrefix(line, "ProductName:"))
+		} else if strings.HasPrefix(line, "ProductVersion:") {
+			productVersion = strings.TrimSpace(strings.TrimPrefix(line, "ProductVersion:"))
+		}
+	}
+
+	if productName != "" && productVersion != "" {
+		return productName + " " + productVersion, outputStr
+	}
+
+	return "macOS", outputStr
+}
+
 func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 	switch req.Method {
 	case "initialize":
@@ -302,7 +514,7 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 		tools := []Tool{
 			{
 				Name:        "exec_command",
-				Description: "执行系统命令，支持跨平台命令转换和特殊字符处理",
+				Description: "执行系统命令，智能处理Windsurf的Invoke-Session前缀，自动检测并转换Linux命令到Windows",
 				InputSchema: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -324,6 +536,15 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 						},
 					},
 					"required": []string{"command"},
+				},
+			},
+			{
+				Name:        "get_os_info",
+				Description: "获取详细的操作系统信息，包括版本、架构、主机名等",
+				InputSchema: map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+					"required":   []string{},
 				},
 			},
 		}
@@ -353,6 +574,24 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 			}
 
 			result := s.executeCommand(cmdReq)
+			resultBytes, _ := json.Marshal(result)
+
+			return MCPResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result: map[string]interface{}{
+					"content": []map[string]interface{}{
+						{
+							"type": "text",
+							"text": string(resultBytes),
+						},
+					},
+				},
+			}
+		}
+
+		if params.Name == "get_os_info" {
+			result := s.getOSInfo()
 			resultBytes, _ := json.Marshal(result)
 
 			return MCPResponse{

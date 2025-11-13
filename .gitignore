@@ -1,0 +1,17 @@
+# 编译后的可执行文件
+*.exe
+*.exe~
+
+# Go 构建缓存
+go.sum
+
+# IDE 文件
+.vscode/
+.idea/
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp

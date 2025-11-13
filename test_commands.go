@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"runtime"
 )
@@ -72,10 +73,35 @@ func TestQuoteHandling() {
 	}
 }
 
+// 测试操作系统信息获取功能
+func TestOSInfo() {
+	server := &ExecCommandServer{}
+	
+	fmt.Println("=== 测试操作系统信息获取 ===")
+	
+	// 获取操作系统信息
+	osInfo := server.getOSInfo()
+	
+	// 格式化输出
+	jsonData, err := json.MarshalIndent(osInfo, "", "  ")
+	if err != nil {
+		fmt.Printf("JSON序列化失败: %v\n", err)
+		return
+	}
+	
+	fmt.Println("操作系统信息:")
+	fmt.Println(string(jsonData))
+	
+	fmt.Println("=== 操作系统信息测试完成 ===\n")
+}
+
 func RunTests() {
 	fmt.Println("=== 测试跨平台命令转换 ===")
 	TestCommandConversion()
 	
 	fmt.Println("=== 测试引号处理 ===")
 	TestQuoteHandling()
+	
+	fmt.Println("=== 测试操作系统信息 ===")
+	TestOSInfo()
 }
