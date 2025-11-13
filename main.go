@@ -119,7 +119,6 @@ func NewExecCommandServer() *ExecCommandServer {
 	return &ExecCommandServer{}
 }
 
-
 func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 	startTime := time.Now()
 
@@ -223,7 +222,7 @@ func (s *ExecCommandServer) getWindowsVersion() (string, string) {
 	}
 
 	outputStr := string(output)
-	
+
 	// 解析Windows版本
 	if strings.Contains(outputStr, "Windows 11") {
 		return "Windows 11", outputStr
@@ -350,7 +349,7 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 		tools := []Tool{
 			{
 				Name:        "exec_command",
-				Description: "执行系统命令。使用前请先调用get_os_info获取操作系统信息，然后根据系统类型提供对应的命令。Windows系统使用PowerShell命令（如Get-Process, Get-ChildItem），Linux/macOS使用bash命令（如ls, ps, grep）。命令将直接执行，不做任何转换或处理。",
+				Description: "执行系统命令。使用前请先调用get_os_info获取操作系统信息，然后根据系统类型提供对应的命令。Windows系统使用PowerShell命令（如Get-Process, Get-ChildItem），Linux/macOS使用bash命令（如ls, ps, grep）。命令将直接执行，工具不做任何转换或处理。",
 				InputSchema: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
