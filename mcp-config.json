@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "go-mcp-exec-command": {
+      "command": "go",
+      "args": ["run", "main.go"],
+      "cwd": "d:\\Data\\Desktop\\Plugins\\go-mcp-exec-command"
+    }
+  }
+}
