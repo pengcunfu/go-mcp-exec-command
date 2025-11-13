@@ -350,7 +350,7 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 		tools := []Tool{
 			{
 				Name:        "exec_command",
-				Description: "直接执行系统命令，不做任何处理或转换",
+				Description: "执行系统命令。使用前请先调用get_os_info获取操作系统信息，然后根据系统类型提供对应的命令。Windows系统使用PowerShell命令（如Get-Process, Get-ChildItem），Linux/macOS使用bash命令（如ls, ps, grep）。命令将直接执行，不做任何转换或处理。",
 				InputSchema: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
