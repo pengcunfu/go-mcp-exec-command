@@ -1,5 +1,9 @@
 # Go MCP Exec Command
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org/)
+[![Version](https://img.shields.io/badge/Version-0.0.1-green.svg)](https://github.com/pengcunfu/go-mcp-exec-command)
+
 一个用 Go 语言开发的 MCP (Model Context Protocol) 服务器，专门用于执行系统命令并解决跨平台兼容性问题。
 
 ## 主要功能
@@ -137,6 +141,18 @@ go-mcp-exec-command/
 - `sanitizeCommand()`: 增强命令清理逻辑
 - `handleNestedQuotes()`: 改进引号处理
 
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
 ## 许可证
 
-MIT License
+本项目采用 Apache License 2.0 许可证。详情请参阅 [LICENSE](LICENSE) 文件。
+
+## 作者
+
+- **pengcunfu** - [GitHub](https://github.com/pengcunfu)
+
+## 仓库
+
+- GitHub: [https://github.com/pengcunfu/go-mcp-exec-command](https://github.com/pengcunfu/go-mcp-exec-command)
