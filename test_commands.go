@@ -22,54 +22,28 @@ import (
 	"runtime"
 )
 
-// 测试跨平台命令转换
-func TestCommandConversion() {
+// 测试直接命令执行
+func TestDirectExecution() {
 	server := &ExecCommandServer{}
 	
-	testCases := []struct {
-		input    string
-		expected string
-		platform string
-	}{
-		{
-			input:    "ls -la && cat file.txt",
-			expected: "dir ; type file.txt",
-			platform: "windows",
-		},
-		{
-			input:    "mkdir -p test && cd test",
-			expected: "mkdir test ; cd test",
-			platform: "windows",
-		},
-		{
-			input:    "grep 'pattern' file.txt && echo 'found'",
-			expected: "findstr 'pattern' file.txt ; echo 'found'",
-			platform: "windows",
-		},
-	}
+	fmt.Println("=== 测试直接命令执行 ===")
+	fmt.Printf("当前平台: %s\n", runtime.GOOS)
 	
-	for _, tc := range testCases {
-		if runtime.GOOS == "windows" {
-			result := server.convertCommand(tc.input)
-			fmt.Printf("输入: %s\n输出: %s\n期望: %s\n匹配: %t\n\n", 
-				tc.input, result, tc.expected, result == tc.expected)
-		}
-	}
-}
-
-// 测试引号处理
-func TestQuoteHandling() {
-	server := &ExecCommandServer{}
-	
+	// 测试简单命令
 	testCases := []string{
-		`Invoke-Session "echo \"hello world\""`,
-		`"echo \"nested quotes\""`,
-		`echo "simple quotes"`,
+		"echo hello world",
+		"dir",  // Windows 命令
 	}
 	
-	for _, tc := range testCases {
-		result := server.sanitizeCommand(tc)
-		fmt.Printf("输入: %s\n输出: %s\n\n", tc, result)
+	for _, cmd := range testCases {
+		fmt.Printf("测试命令: %s\n", cmd)
+		req := CommandRequest{
+			Command: cmd,
+			Timeout: 10,
+		}
+		
+		result := server.executeCommand(req)
+		fmt.Printf("执行结果: 成功=%t, 输出长度=%d\n\n", result.Success, len(result.Output))
 	}
 }
 
@@ -96,11 +70,8 @@ func TestOSInfo() {
 }
 
 func RunTests() {
-	fmt.Println("=== 测试跨平台命令转换 ===")
-	TestCommandConversion()
-	
-	fmt.Println("=== 测试引号处理 ===")
-	TestQuoteHandling()
+	fmt.Println("=== 测试直接命令执行 ===")
+	TestDirectExecution()
 	
 	fmt.Println("=== 测试操作系统信息 ===")
 	TestOSInfo()

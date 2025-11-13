@@ -89,10 +89,9 @@ type CallToolParams struct {
 }
 
 type CommandRequest struct {
-	Command     string `json:"command"`
-	WorkingDir  string `json:"working_dir,omitempty"`
-	Timeout     int    `json:"timeout,omitempty"`
-	AutoConvert bool   `json:"auto_convert,omitempty"`
+	Command    string `json:"command"`
+	WorkingDir string `json:"working_dir,omitempty"`
+	Timeout    int    `json:"timeout,omitempty"`
 }
 
 type CommandResponse struct {
@@ -120,152 +119,6 @@ func NewExecCommandServer() *ExecCommandServer {
 	return &ExecCommandServer{}
 }
 
-// 跨平台命令转换
-func (s *ExecCommandServer) convertCommand(command string) string {
-	if runtime.GOOS != "windows" {
-		return command
-	}
-
-	// Windows 平台转换
-	converted := command
-
-	// 1. 替换 && 为 ;
-	converted = strings.ReplaceAll(converted, " && ", " ; ")
-	converted = strings.ReplaceAll(converted, "&&", ";")
-
-	// 2. 处理常见的 Linux 命令
-	converted = s.convertLinuxCommands(converted)
-
-	// 3. 处理路径分隔符
-	converted = s.convertPathSeparators(converted)
-
-	return converted
-}
-
-// 转换常见的 Linux 命令到 Windows 等价命令
-func (s *ExecCommandServer) convertLinuxCommands(command string) string {
-	// 常见命令映射
-	replacements := map[string]string{
-		"ls -la":    "dir",
-		"ls -l":     "dir",
-		"ls":        "dir",
-		"cat ":      "type ",
-		"grep ":     "findstr ",
-		"which ":    "where ",
-		"pwd":       "cd",
-		"rm -rf ":   "rmdir /s /q ",
-		"rm -f ":    "del /f ",
-		"rm ":       "del ",
-		"cp -r ":    "xcopy /e /i ",
-		"cp ":       "copy ",
-		"mv ":       "move ",
-		"mkdir -p ": "mkdir ",
-		"touch ":    "echo. > ",
-	}
-
-	result := command
-	for linux, windows := range replacements {
-		if strings.Contains(result, linux) {
-			result = strings.ReplaceAll(result, linux, windows)
-		}
-	}
-
-	return result
-}
-
-// 转换路径分隔符
-func (s *ExecCommandServer) convertPathSeparators(command string) string {
-	if runtime.GOOS != "windows" {
-		return command
-	}
-
-	// 简单的路径转换，避免过度转换
-	words := strings.Fields(command)
-	for i, word := range words {
-		// 如果包含 / 且看起来像路径
-		if strings.Contains(word, "/") && !strings.HasPrefix(word, "http") {
-			words[i] = strings.ReplaceAll(word, "/", "\\")
-		}
-	}
-
-	return strings.Join(words, " ")
-}
-
-// 处理 Windsurf Invoke-Session 引号问题
-func (s *ExecCommandServer) sanitizeCommand(command string) string {
-	// 移除可能导致问题的 Invoke-Session 前缀
-	if strings.HasPrefix(command, "Invoke-Session") {
-		// 提取实际命令
-		parts := strings.SplitN(command, "\"", 3)
-		if len(parts) >= 3 {
-			command = parts[1]
-		}
-	}
-
-	// 处理嵌套引号问题
-	command = s.handleNestedQuotes(command)
-
-	return command
-}
-
-// 处理嵌套引号
-func (s *ExecCommandServer) handleNestedQuotes(command string) string {
-	// 如果命令被双引号包围，且内部有引号，需要特殊处理
-	if strings.HasPrefix(command, "\"") && strings.HasSuffix(command, "\"") {
-		// 移除外层引号
-		inner := command[1 : len(command)-1]
-
-		// 转义内部引号
-		inner = strings.ReplaceAll(inner, "\"", "\\\"")
-
-		return inner
-	}
-
-	// 转义单独的引号
-	return strings.ReplaceAll(command, "\"", "\\\"")
-}
-
-// 检测命令是否需要跨平台转换
-func (s *ExecCommandServer) needsCrossPlatformConversion(command string) bool {
-	if runtime.GOOS != "windows" {
-		return false
-	}
-	
-	// 检测常见的Linux命令和语法
-	linuxIndicators := []string{
-		" && ",  // Linux命令连接符
-		"ls ",   // Linux命令
-		"cat ",
-		"grep ",
-		"which ",
-		"rm ",
-		"cp ",
-		"mv ",
-		"mkdir -p",
-		"touch ",
-		"pwd",
-	}
-	
-	commandLower := strings.ToLower(command)
-	for _, indicator := range linuxIndicators {
-		if strings.Contains(commandLower, indicator) {
-			return true
-		}
-	}
-	
-	// 检测是否以Linux命令开头
-	linuxCommands := []string{"ls", "cat", "grep", "which", "rm", "cp", "mv", "pwd"}
-	firstWord := strings.Fields(command)
-	if len(firstWord) > 0 {
-		for _, cmd := range linuxCommands {
-			if strings.ToLower(firstWord[0]) == cmd {
-				return true
-			}
-		}
-	}
-	
-	return false
-}
 
 func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 	startTime := time.Now()
@@ -275,19 +128,8 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 		req.Timeout = 30
 	}
 
-	// 处理命令
-	originalCommand := req.Command
-	processedCommand := req.Command
-	
-	// 检测是否是Windsurf的Invoke-Session命令，如果是则需要清理
-	if strings.HasPrefix(req.Command, "Invoke-Session") {
-		processedCommand = s.sanitizeCommand(req.Command)
-	}
-	
-	// 只有在明确需要跨平台转换时才转换
-	if req.AutoConvert && s.needsCrossPlatformConversion(processedCommand) {
-		processedCommand = s.convertCommand(processedCommand)
-	}
+	// 直接使用原始命令，不做任何处理
+	command := req.Command
 
 	// 创建执行上下文
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Timeout)*time.Second)
@@ -302,9 +144,9 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 	// 执行命令
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "cmd", "/c", processedCommand)
+		cmd = exec.CommandContext(ctx, "cmd", "/c", command)
 	} else {
-		cmd = exec.CommandContext(ctx, "sh", "-c", processedCommand)
+		cmd = exec.CommandContext(ctx, "sh", "-c", command)
 	}
 
 	cmd.Dir = workingDir
@@ -316,7 +158,7 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 		Success:  err == nil,
 		Output:   string(output),
 		Duration: duration.String(),
-		Command:  processedCommand,
+		Command:  command,
 		Platform: runtime.GOOS,
 	}
 
@@ -328,12 +170,6 @@ func (s *ExecCommandServer) executeCommand(req CommandRequest) CommandResponse {
 			response.ExitCode = -1
 		}
 	}
-
-	// 添加调试信息
-	debugInfo := fmt.Sprintf("\n--- 调试信息 ---\n原始命令: %s\n处理后命令: %s\n平台: %s\n工作目录: %s\n执行时间: %s\n",
-		originalCommand, processedCommand, runtime.GOOS, workingDir, duration)
-
-	response.Output = response.Output + debugInfo
 
 	return response
 }
@@ -514,7 +350,7 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 		tools := []Tool{
 			{
 				Name:        "exec_command",
-				Description: "执行系统命令，智能处理Windsurf的Invoke-Session前缀，自动检测并转换Linux命令到Windows",
+				Description: "直接执行系统命令，不做任何处理或转换",
 				InputSchema: map[string]interface{}{
 					"type": "object",
 					"properties": map[string]interface{}{
@@ -529,10 +365,6 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 						"timeout": map[string]interface{}{
 							"type":        "integer",
 							"description": "超时时间（秒，默认30秒）",
-						},
-						"auto_convert": map[string]interface{}{
-							"type":        "boolean",
-							"description": "是否自动转换跨平台命令（默认true）",
 						},
 					},
 					"required": []string{"command"},
@@ -566,11 +398,6 @@ func (s *ExecCommandServer) handleRequest(req MCPRequest) MCPResponse {
 			var cmdReq CommandRequest
 			if argBytes, err := json.Marshal(params.Arguments); err == nil {
 				json.Unmarshal(argBytes, &cmdReq)
-			}
-
-			// 默认启用自动转换
-			if params.Arguments["auto_convert"] == nil {
-				cmdReq.AutoConvert = true
 			}
 
 			result := s.executeCommand(cmdReq)
