@@ -1,3 +1,3 @@
-module go-mcp-exec-command
+module mcp-bash-server
 
 go 1.21

@@ -24,7 +24,7 @@ import (
 
 // 测试直接命令执行
 func TestDirectExecution() {
-	server := &ExecCommandServer{}
+	server := &BashServer{}
 	
 	fmt.Println("=== 测试直接命令执行 ===")
 	fmt.Printf("当前平台: %s\n", runtime.GOOS)
@@ -49,7 +49,7 @@ func TestDirectExecution() {
 
 // 测试操作系统信息获取功能
 func TestOSInfo() {
-	server := &ExecCommandServer{}
+	server := &BashServer{}
 	
 	fmt.Println("=== 测试操作系统信息获取 ===")
 	
@@ -66,7 +66,7 @@ func TestOSInfo() {
 	fmt.Println("操作系统信息:")
 	fmt.Println(string(jsonData))
 	
-	fmt.Println("=== 操作系统信息测试完成 ===\n")
+	fmt.Println("=== 操作系统信息测试完成 ===")
 }
 
 func RunTests() {
